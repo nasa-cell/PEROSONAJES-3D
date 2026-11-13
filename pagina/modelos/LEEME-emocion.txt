@@ -1,0 +1,3 @@
+emocion.onnx: HSEmotion enet_b0_8_best_afew, de Andrey Savchenko.
+https://github.com/av-savchenko/face-emotion-recognition
+Licencia Apache-2.0.

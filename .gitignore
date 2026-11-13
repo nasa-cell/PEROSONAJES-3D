@@ -1,0 +1,8 @@
+# solo en el PC del autor
+pc instalador/
+maquetas/
+pendientes.md
+*.mp4
+node_modules/
+# animaciones de VRoid: su licencia no deja repartirlas sueltas
+pagina/animaciones/*.vrma

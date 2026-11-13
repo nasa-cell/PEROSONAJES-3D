@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Personaje que baila</title>
+<style>
+  :root { --azul: #1d4ed8; --azul2: #3b82f6; --oro: #f59e0b; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  /* fondo azul noche con un foco de luz detrás del personaje (el foco va detrás para no ponerlo pálido) */
+  body { font: 15px system-ui, sans-serif; background: radial-gradient(ellipse at 50% 30%, #1e3a8a 0%, #0f1f4d 60%, #070f2a 100%); color: #0f172a; }
+  #foco { position: fixed; left: 50%; top: -10%; width: 60%; height: 100%; transform: translateX(-50%); pointer-events: none;
+    background: radial-gradient(ellipse at 50% 0%, rgba(255,240,190,.4), rgba(255,240,190,0) 65%); clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%); }
+  #escena { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  /* barra: botones grandes con ícono y nombre, marco verde */
+  .barra { position: fixed; left: 8px; right: 8px; margin: 0 auto; width: fit-content; bottom: 14px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+    background: rgba(10,20,50,.82); border: 2px solid #22c55e; border-radius: 20px; padding: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.35); transition: opacity .4s, transform .4s; }
+  .barra button { border: 2px solid #22c55e; background: #0f1f4d; color: #e0ecff; border-radius: 14px; padding: 8px 10px; min-width: 78px; font-weight: 700; cursor: pointer; font-size: 13px;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; transition: transform .12s, background .2s; }
+  .barra button i { font-style: normal; font-size: 22px; line-height: 1; }
+  .barra button:hover { transform: translateY(-2px); }
+  .barra button:active { transform: scale(.96); }
+  .barra button.on { background: #16a34a; color: #fff; border-color: #86efac; }
+  .barra button.oro { color: #fde68a; }
+  .barra .sep { width: 2px; background: rgba(34,197,94,.4); margin: 4px 2px; }
+  body.web #llamadas, body.web #vozKusuri { display: none !important; }
+  body.escondido .barra { opacity: 0; transform: translateY(24px); pointer-events: none; }
+  .conjuntos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+  .conjuntos button { border: 2px solid #bfd3f5; background: #fff; border-radius: 10px; padding: 6px; cursor: pointer; font-weight: 700; font-size: 12px; text-align: left; display: flex; flex-direction: column; gap: 5px; color: #0f172a; }
+  .conjuntos button.on { border-color: var(--azul); background: #eff5ff; }
+  .conjuntos .muestra { display: flex; height: 20px; border-radius: 6px; overflow: hidden; }
+  .conjuntos .muestra i { flex: 1; }
+  .barra button:focus-visible, #panel button:focus-visible, #panel label.boton:focus-within, #guia button:focus-visible { outline: 3px solid var(--oro); outline-offset: 2px; }
+  #columna { position: fixed; right: 16px; top: 16px; bottom: 96px; width: 340px; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  #columna > * { pointer-events: auto; }
+  #panel { display: none; flex: 0 1 auto; min-height: 0; overflow: auto; background: #fff; border: 2px solid var(--azul2); border-radius: 14px; padding: 10px 12px; }
+  #panel.ver { display: block; }
+  .pest { display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap; }
+  .pest button { border: 0; background: #dbeafe; color: var(--azul); border-radius: 8px; padding: 7px 10px; font-weight: 700; cursor: pointer; font-size: 14px; }
+  .pest button.on { background: var(--azul); color: #fff; }
+  .fila { display: grid; grid-template-columns: 74px 1fr 44px; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .fila input { width: 100%; accent-color: var(--azul); }
+  .grupo { font-size: 14px; font-weight: 700; margin: 8px 0 5px; }
+  .colores { display: flex; flex-wrap: wrap; gap: 6px; }
+  .colores button { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #bfd3f5; cursor: pointer; }
+  .colores button.on { border: 3px solid var(--azul); box-shadow: 0 0 0 2px #fff inset; }
+  .pie { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .pie button, .pie label.boton, .quitar { border: 2px solid var(--azul2); background: #fff; color: var(--azul); border-radius: 9px; padding: 7px 9px; font-weight: 700; cursor: pointer; font-size: 13px; }
+  .pie input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .nada { font-size: 14px; color: #475569; }
+  #guia { max-width: min(520px, calc(100% - 24px)); border: 2px solid var(--azul); border-radius: 14px; padding: 16px; color: #0f172a; }
+  #guia h2 { font-size: 18px; margin-bottom: 8px; color: var(--azul); }
+  #guia ol { margin: 0 0 12px 20px; line-height: 1.5; }
+  #guia button { border: 0; background: var(--azul); color: #fff; border-radius: 9px; padding: 9px 14px; font-weight: 700; cursor: pointer; }
+  #creditos { position: fixed; left: 8px; bottom: 4px; font-size: 10px; color: #93a4c8; pointer-events: none; }
+  #aviso { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: var(--azul); color: #fff; border: 2px solid var(--oro);
+    border-radius: 10px; padding: 8px 14px; font-weight: 700; max-width: calc(100% - 32px); text-align: center; }
+  #vista { position: relative; flex: none; width: 100%; display: none; }
+  #vista video, #vista canvas { width: 100%; display: block; border-radius: 10px; transform: scaleX(-1); }
+  #vista video { border: 2px solid var(--azul2); }
+  #vista canvas { position: absolute; left: 0; top: 0; padding: 2px; }
+  #estado { margin-top: 6px; background: #fff; border: 2px solid var(--azul2); border-radius: 8px; padding: 4px 8px; font-size: 13px; font-weight: 700; color: var(--azul); }
+  #soltar { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(29,78,216,.25); font-size: 26px; font-weight: 800; color: var(--azul); }
+  @media (max-width: 340px) { #columna { bottom: 200px !important; } }
+  @media (max-width: 600px) { #columna { top: 8px; right: 8px; left: 8px; bottom: 148px; width: auto; align-items: flex-end; } #vista { width: 170px; } #estado { font-size: 11px; }
+    #panel { width: 100%; margin-top: auto; } .fila { margin-bottom: 3px; } .pie { margin-top: 6px; } .barra { bottom: 8px; gap: 4px; padding: 6px; } .barra button { padding: 6px; min-width: 60px; font-size: 11px; } .barra .sep { display: none; } }
+  #avisoLlamada { display: none; position: fixed; left: 8px; right: 8px; margin: 0 auto; width: fit-content; max-width: min(520px, calc(100% - 16px)); bottom: 84px; background: #fff; border: 2px solid var(--azul); border-radius: 12px; padding: 9px 12px; font-size: 14px; line-height: 1.4; color: #0f172a; z-index: 5; }
+  #avisoLlamada.listo { background: #dcfce7; border-color: #15803d; color: #14532d; }
+  #avisoLlamada.mal { background: #fee2e2; border-color: #b91c1c; color: #7f1d1d; }
+  #avisoLlamada b { display: block; font-size: 16px; }
+  #listaPersonajes { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 7px; margin-bottom: 8px; }
+  .carta { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px; background: #fff; border: 2px solid var(--azul2); border-radius: 10px; font-size: 12px; font-weight: 600; color: #0f172a; cursor: pointer; }
+  .carta.on { border-color: var(--azul); background: #dbeafe; }
+  .carta img, .carta .sinFoto { width: 58px; height: 78px; border-radius: 6px; object-fit: cover; background: #dbeafe; }
+  .carta span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .carta .quitarCarta { position: absolute; top: 1px; right: 1px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: #fff; color: #b91c1c; font-weight: 800; cursor: pointer; }
+  #revisionPersonaje { display: none; margin-bottom: 8px; padding: 7px 9px; border-radius: 8px; font-size: 13px; line-height: 1.35; }
+  #revisionPersonaje.bien { display: block; background: #dcfce7; color: #14532d; }
+  #revisionPersonaje.mal { display: block; background: #fee2e2; color: #7f1d1d; }
+  #revisionPersonaje.espera { display: block; background: #dbeafe; color: #1e3a8a; }
+  #cajaVoz { display: none; position: fixed; left: 16px; top: 16px; width: min(340px, calc(100% - 200px)); background: #fff; border: 2px solid var(--azul2); border-radius: 12px; padding: 9px 10px; font-size: 14px; color: #0f172a; }
+  #cajaVoz.ver { display: block; }
+  #vozEstado { min-height: 38px; line-height: 1.35; margin-bottom: 6px; }
+  #vozEstado.mal { color: #b91c1c; font-weight: 700; }
+  #vozForm { display: flex; gap: 6px; }
+  #vozTexto { flex: 1; min-width: 0; border: 2px solid var(--azul2); border-radius: 8px; padding: 7px 8px; font-size: 14px; }
+  #vozForm button { border: 0; background: var(--azul); color: #fff; border-radius: 8px; padding: 7px 11px; font-weight: 700; cursor: pointer; }
+  @media (max-width: 600px) { #cajaVoz { left: 8px; top: 8px; width: calc(100% - 194px); padding: 6px; font-size: 12px; } #vozEstado { min-height: 32px; } #vozTexto { font-size: 13px; padding: 5px; } #vozForm button { padding: 5px 7px; } }
+  body.llamada #cajaVoz, body.llamada .barra, body.llamada #panel, body.llamada #estado, body.llamada #avisoLlamada { display: none !important; }
+  /* La cámara sigue funcionando para copiar movimientos, pero queda fuera de la imagen */
+  body.llamada #columna { position: fixed; top: 0; left: -2000px; right: auto; bottom: auto; width: 320px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "./librerias/three/three.module.min.js",
+  "three/addons/": "./librerias/three/addons/",
+  "@pixiv/three-vrm": "./librerias/three-vrm/three-vrm.module.min.js",
+  "onnxruntime-web": "./librerias/ort/ort.webgpu.bundle.min.mjs",
+  "@pixiv/three-vrm-animation": "./librerias/three-vrm/three-vrm-animation.module.min.js",
+  "vision": "./librerias/mediapipe/vision_bundle.mjs"
+} }
+</script>
+</head>
+<body>
+<div id="foco"></div>
+<canvas id="escena"></canvas>
+<div id="columna">
+  <div id="vista"><video id="video" playsinline muted></video><canvas id="puntos"></canvas><div id="estado">Te veo…</div></div>
+  <div id="panel"></div>
+</div>
+<div id="aviso">Cargando personaje…</div>
+<div class="barra">
+  <button id="bailar" class="on">💃 Bailar</button>
+  <button id="camara">📷 Cámara</button>
+  <button id="cerca">🎥 YouTuber</button>
+  <span class="sep"></span>
+  <button id="voz">🎤 Voz</button>
+  <button id="vozKusuri">🗣️ Kusuri</button>
+  <button id="musica">🔈 Ritmo</button>
+  <span class="sep"></span>
+  <button id="invocar" style="display:none">🦊 Zorra</button>
+  <button id="llamadas" class="oro">📺 Llamadas</button>
+  <button id="personaje">🎨 Personaje</button>
+</div>
+<div id="avisoLlamada" role="status"></div>
+<div id="cajaVoz">
+  <div id="vozEstado" role="status"></div>
+  <form id="vozForm"><input id="vozTexto" type="text" maxlength="400" placeholder="Escribe aquí" aria-label="Frase para que la diga"><button type="submit">Decir</button></form>
+</div>
+<dialog id="guia">
+  <h2>Usarla en llamadas o en vivo</h2>
+  <ol>
+    <li>Instala <b>OBS Studio</b>, que es gratis, y deja esta página abierta con la cámara prendida.</li>
+    <li>En OBS, en <b>Fuentes</b>, toca <b>+</b>, elige <b>Captura de ventana</b> y selecciona esta página.</li>
+    <li>Toca <b>Iniciar cámara virtual</b>.</li>
+    <li>En Zoom o Meet, elige <b>OBS Virtual Camera</b> como cámara.</li>
+    <li>En TikTok Live Studio, agrega esta ventana con <b>Captura de ventana</b>, si tu cuenta tiene acceso a transmitir.</li>
+  </ol>
+  <button id="cerrarGuia">Entendido</button>
+</dialog>
+<div id="soltar">Suelta aquí el archivo .vrm</div>
+<div id="creditos">Animaciones de reposo: pixiv Inc. VRoid Project · Shibahu: 腱鞘炎の人 (Sketchfab, CC BY 4.0) · Zorra: hecha en VRoid Studio (pixiv) a partir de AvatarSample_K</div>
+<script type="module" src="programa.js"></script>
+</body>
+</html>
