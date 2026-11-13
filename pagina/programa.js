@@ -867,7 +867,7 @@ function correrMano(lado, cuanto) {
   const mano = hueso(lado + 'Hand'); if (!mano || !destinos[lado]) return;
   const giroMano = mano.getWorldQuaternion(q4());
   destinos[lado].add(cuanto);
-  alcanzar(lado, destinos[lado], codosHacia[lado] || new THREE.Vector3(lado === 'left' ? 0.4 : -0.4, -1, -0.3));
+  alcanzar(lado, destinos[lado], codosHacia[lado] || alCuerpo(new THREE.Vector3(lado === 'left' ? 0.4 : -0.4, -1, -0.3)));
   mano.quaternion.copy(mano.parent.getWorldQuaternion(q4()).invert().multiply(giroMano));
   mano.updateWorldMatrix(false, true);
 }
@@ -887,7 +887,7 @@ function sacarDelCuerpo(lado) {
     if (mano.max >= brazo.max) { correrMano(lado, haciaAfuera(muneca, mano.dir, mano.max * 1.3 + 0.004)); continue; }
     // El antebrazo o el codo entran: el codo sale hacia afuera y la muñeca acompaña un poco
     const fuera = haciaAfuera(hueso(lado + 'LowerArm').getWorldPosition(v3()), brazo.dir, 1).normalize();
-    const codo = (codosHacia[lado] || new THREE.Vector3(lado === 'left' ? 0.4 : -0.4, -1, -0.3)).clone().normalize();
+    const codo = (codosHacia[lado] || alCuerpo(new THREE.Vector3(lado === 'left' ? 0.4 : -0.4, -1, -0.3))).clone().normalize();
     codosHacia[lado] = codo.add(fuera.clone().multiplyScalar(1.5));
     correrMano(lado, haciaAfuera(muneca, brazo.dir, brazo.max * 0.7 + 0.003));
   }
@@ -994,6 +994,48 @@ const lienzoCara = document.createElement('canvas'); lienzoCara.width = lienzoCa
 
 let horaCara = 0;
 const dtCara = ahora => { const d = Math.min(0.1, Math.max(0, (ahora - horaCara) / 1000)); horaCara = ahora; return d; };
+/* Media vuelta. El detector acierta de frente, de costado y casi de espaldas (gira más de 120°), pero ya
+   de espaldas a veces cree que lo miras de frente y cambia tu izquierda por tu derecha. Como para pasar de
+   espaldas a frente hay que pasar por el costado, si venías de espaldas y de golpe dice «de frente» sin
+   costado de por medio, es esa confusión: cada punto vuelve a su lado y su profundidad se invierte
+   (lo puso delante del cuerpo y está detrás). Un costado vale si dura 0,1 s o 3 cuadros (en el salto de la confusión
+   el detector pasa uno o dos cuadros por el costado). */
+const PARES = [[1, 4], [2, 5], [3, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16], [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28], [29, 30], [31, 32]];
+let zonaGiro = 'frente', costadoDesde = null, cuadrosCostado = 0, ladosCambiados = false;
+function corregirLados(pose, t) {
+  const w = pose.w, l = pose.l, caderas = (l[23].visibility ?? 1) > 0.5 && (l[24].visibility ?? 1) > 0.5;
+  const dx = (w[12].x - w[11].x) + (caderas ? w[24].x - w[23].x : 0), dz = (w[12].z - w[11].z) + (caderas ? w[24].z - w[23].z : 0);
+  const a = Math.abs(Math.atan2(dz, -dx) * 180 / Math.PI);
+  if (a > 120) { zonaGiro = 'espaldas'; costadoDesde = null; cuadrosCostado = 0; }
+  else if (a >= 60) { if (costadoDesde === null) costadoDesde = t; if (t - costadoDesde >= 100 || ++cuadrosCostado >= 3) zonaGiro = 'costado'; }
+  else { costadoDesde = null; cuadrosCostado = 0; if (zonaGiro !== 'espaldas') zonaGiro = 'frente'; }
+  ladosCambiados = zonaGiro === 'espaldas' && a < 60;
+  if (!ladosCambiados) return pose;
+  const cambiar = lista => { const r = lista.map(p => ({ ...p, z: -p.z })); for (const [a, b] of PARES) [r[a], r[b]] = [r[b], r[a]]; return r; };
+  return { l: cambiar(l), w: cambiar(pose.w), crudo: pose };
+}
+// Hacia dónde mira tu cuerpo (grados alrededor del eje vertical, sin cortar en 180: da vueltas enteras)
+const ARRIBA = new THREE.Vector3(0, 1, 0), envolver = g => ((g % 360) + 540) % 360 - 180;
+let giroCuerpo = 0, giroMedido = null, tGiroCuerpo = 0, cuerpoGiro = q4(), caraContraria = 0;
+const alCuerpo = v => v.applyQuaternion(cuerpoGiro);
+function medirGiroCuerpo(ahora) {
+  const dt = Math.min(0.1, Math.max(0, (ahora - (tGiroCuerpo || ahora)) / 1000)); tGiroCuerpo = ahora;
+  if (ultimaPose) {
+    const w = ultimaPose.w, l = ultimaPose.l, caderas = (l[23].visibility ?? 1) > 0.5 && (l[24].visibility ?? 1) > 0.5;
+    const dx = (w[12].x - w[11].x) + (caderas ? w[24].x - w[23].x : 0), dz = (w[12].z - w[11].z) + (caderas ? w[24].z - w[23].z : 0);
+    const g = Math.atan2(dz, -dx) * 180 / Math.PI;
+    giroMedido = giroMedido === null ? g : giroMedido + envolver(g - giroMedido);
+    // nunca más de media vuelta por delante de lo que ya giró el personaje (un error no lo hace dar una vuelta entera)
+    giroMedido = giroCuerpo + envolver(giroMedido - giroCuerpo);
+    // si se ve tu cara, estás de frente: si la cuenta dice espaldas por medio segundo, se corrige
+    if (ultimaCara && Math.abs(envolver(giroMedido)) > 110) { caraContraria += dt; if (caraContraria > 0.5) { zonaGiro = 'frente'; caraContraria = 0; } }
+    else caraContraria = 0;
+  } else if (!persona || ahora - persona.t > 1500) giroMedido = giroMedido === null ? null : giroMedido + (Math.round(giroMedido / 360) * 360 - giroMedido) * Math.min(1, dt * 2);
+  if (giroMedido !== null) giroCuerpo += (giroMedido - giroCuerpo) * Math.min(1, dt / 0.15);
+  cuerpoGiro.setFromAxisAngle(ARRIBA, giroCuerpo * Math.PI / 180);
+}
+const deEspaldas = () => Math.abs(envolver(giroCuerpo)) > 110;
+
 function seguir(ahora) {
   if (!detectores || video.readyState < 2) return;
   if (video.currentTime !== ultimoVideo) {
@@ -1022,6 +1064,8 @@ function seguir(ahora) {
       else persona = { x: cx, y: cy, t, desde: persona && t - persona.t < 1500 ? persona.desde : t };
       if (PRUEBA.has('medirpersona')) (window.__personaX = window.__personaX || []).push(ultimaPose ? +cx.toFixed(2) : -1);
     }
+    if (ultimaPose) ultimaPose = corregirLados(ultimaPose, t);
+    else if (!persona || t - persona.t > 1500) { ladosCambiados = false; zonaGiro = 'frente'; costadoDesde = null; }
     const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
     cuerpoF = ultimaPose ? filtrar('cuerpo', poseIgualImagen(ultimaPose.l, ultimaPose.w, vw, vh), t, 1.2, 0.012) : null;
     // Cada mano se asigna por cercanía a tu muñeca (más seguro que el «izquierda/derecha» del detector)
@@ -1122,6 +1166,8 @@ function seguir(ahora) {
   const img = p => new THREE.Vector2(p.x * vw, p.y * vh);
   const P = ultimaPose ? ultimaPose.l : null, W = cuerpoF;
   const ve = i => !!P && (P[i].visibility ?? 1) > 0.5;
+  medirGiroCuerpo(ahora);
+  const frenteCuerpo = alCuerpo(reposoDir.frente.clone());
 
   // Piernas y cadera: si se ven, copian las tuyas; si no, quedan paradas y derechas
   // (una pierna tapada por la otra se ve poco: basta con que se distinga algo y esté dentro de la imagen)
@@ -1148,10 +1194,10 @@ function seguir(ahora) {
     const arriba = v3().addVectors(W[11], W[12]).sub(v3().addVectors(W[23], W[24]));
     giroCadera = giroDeBase(reposoDir.torsoArriba, reposoDir.caderaLado, arriba, v3().subVectors(W[24], W[23]));
     ponerGiroMundo('hips', giroCadera, 0.4);
-    const atras = reposoDir.frente.clone().negate(), abajo = reposoDir.torsoArriba.clone().negate();
+    const atras = frenteCuerpo.clone().negate(), abajo = reposoDir.torsoArriba.clone().negate();
     for (const [l, cad, r, tob] of [['left', 24, 26, 28], ['right', 23, 25, 27]]) {
       if (rod[l].si || cuatroPatas) {
-        apuntar(l + 'UpperLeg', cuatroPatas ? abajo.clone().add(reposoDir.frente.clone().multiplyScalar(0.15)) : v3().subVectors(W[r], W[cad]), 0.4);
+        apuntar(l + 'UpperLeg', cuatroPatas ? abajo.clone().add(frenteCuerpo.clone().multiplyScalar(0.15)) : v3().subVectors(W[r], W[cad]), 0.4);
         apuntar(l + 'LowerLeg', atras.clone().add(abajo.clone().multiplyScalar(0.12)), 0.4);
         apuntar(l + 'Foot', atras.clone().add(abajo.clone().multiplyScalar(0.3)), 0.4);
       } else if (dentro(cad) && dentro(r)) {
@@ -1183,14 +1229,15 @@ function seguir(ahora) {
         if (Math.abs(dl - dr) > 0.15 * ancho) apoyo = dl < dr ? 'left' : 'right';
       }
     }
-    const abajo = reposoDir.torsoArriba.clone().negate(), frente = reposoDir.frente;
+    const abajo = reposoDir.torsoArriba.clone().negate(), frente = frenteCuerpo;
     for (const l of ['left', 'right']) {
       const ang = (doblar * 70 + (apoyo && apoyo !== l ? 14 : 0)) * Math.PI / 180;
       apuntar(l + 'UpperLeg', abajo.clone().multiplyScalar(Math.cos(ang)).add(frente.clone().multiplyScalar(Math.sin(ang))), 0.15);
       apuntar(l + 'LowerLeg', abajo.clone().multiplyScalar(Math.cos(ang)).sub(frente.clone().multiplyScalar(Math.sin(ang))), 0.15);
       const pie = hueso(l + 'Foot'); if (pie) pie.quaternion.slerp(q4(), 0.15);
     }
-    const hc = hueso('hips'); if (hc) hc.quaternion.slerp(q4(), 0.15);
+    // la cadera mira hacia donde mira tu cuerpo (de espaldas, de costado o de frente)
+    ponerGiroMundo('hips', cuerpoGiro, 0.3);
   }
   if (!piernas && !conRodilla && !cuatroPatas && P) {
     // Cada pierna por separado: si se ve tu rodilla (por ejemplo al subirla o patear), el muslo la copia;
@@ -1214,11 +1261,12 @@ function seguir(ahora) {
     const cadera = i => ve(i) && (P[i].visibility ?? 1) > 0.7 && P[i].y < 0.95;
     const conCadera = (cadera(23) && cadera(24)) || cuatroPatas || giroCadera;
     const arriba = conCadera ? v3().addVectors(W[11], W[12]).sub(v3().addVectors(W[23], W[24])) : reposoDir.torsoArriba.clone();
-    const g = giroDeBase(reposoDir.torsoArriba, reposoDir.torsoLado, arriba, lado);
-    // límites de un torso de persona: gira hasta 60°; se inclina 35° (hasta 90° adelante si la cadera se ve clara)
-    { const eu = new THREE.Euler().setFromQuaternion(g, 'YXZ'), lim = (v, m) => Math.max(-m, Math.min(m, v));
-      eu.x = Math.max(-0.61, Math.min(conCadera ? 1.6 : 0.61, eu.x)); eu.y = lim(eu.y, 1.05); eu.z = lim(eu.z, 0.61); g.setFromEuler(eu); }
-    ponerGiroMundo('spine', (giroCadera ? giroCadera.clone() : q4()).slerp(g, 0.5), 0.4);
+    let g = giroDeBase(reposoDir.torsoArriba, reposoDir.torsoLado, arriba, lado);
+    // límites de un torso de persona, medidos desde hacia donde mira tu cuerpo: gira hasta 60°;
+    // se inclina 35° (hasta 90° adelante si la cadera se ve clara)
+    { const rel = cuerpoGiro.clone().invert().multiply(g), eu = new THREE.Euler().setFromQuaternion(rel, 'YXZ'), lim = (v, m) => Math.max(-m, Math.min(m, v));
+      eu.x = Math.max(-0.61, Math.min(conCadera ? 1.6 : 0.61, eu.x)); eu.y = lim(eu.y, 1.05); eu.z = lim(eu.z, 0.61); g = cuerpoGiro.clone().multiply(rel.setFromEuler(eu)); }
+    ponerGiroMundo('spine', (giroCadera ? giroCadera.clone() : cuerpoGiro.clone()).slerp(g, 0.5), 0.4);
     ponerGiroMundo('chest', g, 0.4);
   }
   vrm.scene.updateMatrixWorld(true);
@@ -1238,6 +1286,7 @@ function seguir(ahora) {
   let marco = null;
   if (ultimaCara && ultimaCara.length > 454) { marco = marcoDeCara(ultimaCara, vw, vh, ahora); marcoRecordado = { marco, t: ahora }; }
   else if (marcoRecordado && ahora - marcoRecordado.t < 1500) marco = marcoRecordado.marco;
+  if (deEspaldas()) { marco = null; ojosImg = null; marcoRecordado = null; ojosRecordados = null; }   // de espaldas no hay cara a la que llevar la mano
 
   // Brazos: se calcula dónde tiene que quedar la muñeca y el brazo se acomoda para llegar.
   //  - Lejos de la cara: igual que tu brazo, medido desde el hombro.
@@ -1270,8 +1319,8 @@ function seguir(ahora) {
     }
     if (!destino) {
       // No se ve el brazo: baja despacio en vez de quedar en una pose rara
-      apuntar(lado + 'UpperArm', new THREE.Vector3(lado === 'left' ? 0.25 : -0.25, -1, 0), 0.08);
-      apuntar(lado + 'LowerArm', new THREE.Vector3(lado === 'left' ? 0.15 : -0.15, -1, 0.15), 0.08);
+      apuntar(lado + 'UpperArm', alCuerpo(new THREE.Vector3(lado === 'left' ? 0.25 : -0.25, -1, 0)), 0.08);
+      apuntar(lado + 'LowerArm', alCuerpo(new THREE.Vector3(lado === 'left' ? 0.15 : -0.15, -1, 0.15)), 0.08);
       destinos[lado] = null;
       continue;
     }
@@ -1279,7 +1328,7 @@ function seguir(ahora) {
     // Hacia dónde va el codo: el tuyo si se ve; si no, hacia abajo y afuera
     const codoHacia = veB(codo, lado) && ve(hombro) && veB(muneca, lado)
       ? v3().subVectors(W[codo], v3().addVectors(W[hombro], W[muneca]).multiplyScalar(0.5))
-      : new THREE.Vector3(lado === 'left' ? 0.4 : -0.4, -1, -0.3);
+      : alCuerpo(new THREE.Vector3(lado === 'left' ? 0.4 : -0.4, -1, -0.3));
     // Límite de velocidad: la mano no puede saltar más de 4 m por segundo (un error no la hace volar)
     const prev = destinos[lado];
     if (prev) {
@@ -1308,7 +1357,7 @@ function seguir(ahora) {
     }
   }
   // Cabeza: su giro sale de la cara (como espejo); boca y ojos de los gestos de la cara
-  if (caraMatriz) {
+  if (caraMatriz && !deEspaldas()) {
     const m = new THREE.Matrix4().fromArray(caraMatriz), r = new THREE.Matrix4().extractRotation(m);
     const e = r.elements;                          // espejo: se invierte lo que cruza el eje x
     e[1] = -e[1]; e[2] = -e[2]; e[4] = -e[4]; e[8] = -e[8];
@@ -1332,11 +1381,20 @@ function seguir(ahora) {
   if (!PRUEBA.has('f')) for (const l of ['left', 'right']) limitarMuneca(l);
   { const c = limitarDedos('left') + limitarDedos('right'); medida.cuadrosDedos = (medida.cuadrosDedos || 0) + 1; if (c) medida.dedosRaros = (medida.dedosRaros || 0) + 1; window.__manosRaras = { cuadros: medida.cuadrosDedos, conDedosRaros: medida.dedosRaros || 0 }; }
   contarDentro();
+  if (PRUEBA.has('medirgiro') && P) {
+    // giro del pecho alrededor del eje vertical (grados) y qué mano quedó más arriba
+    const pecho = hueso('chest') || hueso('spine'), f = reposoDir.frente.clone().applyQuaternion(pecho.getWorldQuaternion(q4()).multiply(rotEscena.clone().invert()));
+    const giro = Math.atan2(f.x, f.z) - Math.atan2(reposoDir.frente.x, reposoDir.frente.z);
+    const alto = l => hueso(l + 'Hand').getWorldPosition(v3()).y;
+    const crudo = (ultimaPose.crudo || ultimaPose).w, cl = (ultimaPose.crudo || ultimaPose).l;
+    (window.__giros = window.__giros || []).push([video.currentTime, +(giro * 180 / Math.PI).toFixed(1), alto('right') > alto('left') ? 1 : 0,
+      (ultimaCara ? 1 : 0) + (ladosCambiados ? 2 : 0),[11, 12, 23, 24, 15, 16, 0].map(i => [crudo[i].x, crudo[i].y, crudo[i].z, cl[i].x, cl[i].y, cl[i].visibility ?? 1].map(v => +v.toFixed(3)))]);
+  }
   medirTodo(P);
   medirManoEnCara(marco);
-  if (caraGestos && ultimaCara) mirarEmocion(ultimaCara, vw, vh, ahora);
-  if (caraGestos && ultimaCara) ponerEmocion(emocionVtuber(caraGestos, medirEmocion(caraGestos, ultimaCara, dtCara(ahora), ahora))); else ponerEmocion(null);
-  if (caraGestos) {
+  if (caraGestos && ultimaCara && !deEspaldas()) mirarEmocion(ultimaCara, vw, vh, ahora);
+  if (caraGestos && ultimaCara && !deEspaldas()) ponerEmocion(emocionVtuber(caraGestos, medirEmocion(caraGestos, ultimaCara, dtCara(ahora), ahora))); else ponerEmocion(null);
+  if (caraGestos && !deEspaldas()) {
     const G = caraGestos, ojo = v => Math.max(0, Math.min(1, (v - 0.3) / 0.4));
     gesto('blink', 0);
     // Unos ojos chicos no son ojos cerrados: se compara con cómo los tienes tú en los últimos 6 s
