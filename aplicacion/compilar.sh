@@ -7,7 +7,7 @@ ETAPA="$COMP/etapa"
 NSIS="$COMP/descargas/nsis/x/nsis-3.11/makensis.exe"
 CSC=/c/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe
 FF=/c/herramientas/ffmpeg/bin/ffmpeg.exe
-VERSION=1.1.0
+VERSION=1.2.0
 SALIDA="$PROYECTO/pc instalador"
 
 rm -rf "$ETAPA"; mkdir -p "$ETAPA" "$SALIDA"

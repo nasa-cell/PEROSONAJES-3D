@@ -1,4 +1,4 @@
-**[⬇ Descargar instalador para Windows (Personajes 3D 1.1.0)](https://github.com/nasa-cell/PEROSONAJES-3D/releases/latest/download/Instalar.Personajes.3D.1.1.0.exe)**
+**[⬇ Descargar instalador para Windows (Personajes 3D 1.2.0)](https://github.com/nasa-cell/PEROSONAJES-3D/releases/latest/download/Instalar.Personajes.3D.1.2.0.exe)**
 
 # Personajes 3D
 

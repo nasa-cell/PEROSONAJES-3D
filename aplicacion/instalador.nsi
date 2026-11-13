@@ -6,7 +6,7 @@ Unicode true
 !include "LogicLib.nsh"
 
 !define NOMBRE "Baile VRM"
-!define VERSION "1.1.0"
+!define VERSION "1.2.0"
 !define CLAVE "Software\Microsoft\Windows\CurrentVersion\Uninstall\BaileVRM"
 
 Name "${NOMBRE}"
