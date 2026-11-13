@@ -1,6 +1,6 @@
 # Personajes 3D
 
-Un personaje 3D (VRM) que **baila solo** o **copia tus movimientos con la cámara**: cuerpo, manos, dedos, cara, parpadeos, boca y emociones. Funciona en el navegador y también como aplicación para Windows.
+Un personaje 3D (VRM) que **baila solo** o **copia tus movimientos con la cámara**: cuerpo, manos, dedos, cara, parpadeos, boca y emociones. Es una aplicación para Windows.
 
 | Shibahu | Zorra |
 |---|---|
@@ -8,7 +8,6 @@ Un personaje 3D (VRM) que **baila solo** o **copia tus movimientos con la cámar
 
 ## Probar
 
-- **En la página web:** https://personajes-3d.onrender.com (la primera vez tarda ~1 minuto en despertar).
 - **En Windows:** descarga el instalador en [Versiones](https://github.com/nasa-cell/PEROSONAJES-3D/releases/latest) y ábrelo. No necesita internet salvo para la voz.
 
 ## Qué hace
