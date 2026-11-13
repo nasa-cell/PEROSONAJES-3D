@@ -1,3 +1,5 @@
+**[⬇ Descargar instalador para Windows (Personajes 3D 1.1.0)](https://github.com/nasa-cell/PEROSONAJES-3D/releases/latest/download/Instalar.Personajes.3D.1.1.0.exe)**
+
 # Personajes 3D
 
 Un personaje 3D (VRM) que **baila solo** o **copia tus movimientos con la cámara**: cuerpo, manos, dedos, cara, parpadeos, boca y emociones. Es una aplicación para Windows.
